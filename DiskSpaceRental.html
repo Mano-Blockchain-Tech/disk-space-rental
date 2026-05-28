@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>DiskChain — Decentralised Storage Marketplace</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #0a0c10;
+    --surface: #111318;
+    --surface2: #181c24;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.13);
+    --accent: #00e5a0;
+    --accent2: #0099ff;
+    --warn: #ff6b35;
+    --text: #e8eaf0;
+    --muted: #6b7280;
+    --mono: 'Space Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+    --radius: 12px;
+    --radius-sm: 8px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; }
+
+  /* GRID BG */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: linear-gradient(rgba(0,229,160,0.03) 1px, transparent 1px),
+                      linear-gradient(90deg, rgba(0,229,160,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none; z-index: 0;
+  }
+
+  .wrap { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 0 24px 80px; }
+
+  /* NAV */
+  nav {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 20px 0; border-bottom: 1px solid var(--border); margin-bottom: 48px;
+  }
+  .logo { font-family: var(--mono); font-size: 18px; color: var(--accent); letter-spacing: -0.5px; }
+  .logo span { color: var(--muted); }
+  .wallet-btn {
+    background: transparent; border: 1px solid var(--border2); color: var(--text);
+    font-family: var(--mono); font-size: 12px; padding: 10px 18px;
+    border-radius: var(--radius-sm); cursor: pointer; transition: all 0.2s;
+  }
+  .wallet-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .wallet-btn.connected { border-color: var(--accent); color: var(--accent); }
+
+  /* HERO */
+  .hero { text-align: center; margin-bottom: 56px; }
+  .hero h1 { font-family: var(--mono); font-size: clamp(28px, 5vw, 48px); font-weight: 700; line-height: 1.1; margin-bottom: 16px; }
+  .hero h1 em { color: var(--accent); font-style: normal; }
+  .hero p { color: var(--muted); font-size: 16px; max-width: 480px; margin: 0 auto; line-height: 1.7; }
+
+  /* STATS ROW */
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 48px; }
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px 24px;
+  }
+  .stat-card .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+  .stat-card .value { font-family: var(--mono); font-size: 24px; color: var(--accent); }
+
+  /* TABS */
+  .tabs { display: flex; gap: 4px; background: var(--surface); border-radius: var(--radius); padding: 4px; margin-bottom: 32px; border: 1px solid var(--border); }
+  .tab {
+    flex: 1; padding: 10px; text-align: center; border-radius: var(--radius-sm);
+    cursor: pointer; font-size: 14px; font-weight: 500; color: var(--muted);
+    transition: all 0.2s; border: none; background: transparent;
+  }
+  .tab.active { background: var(--surface2); color: var(--text); border: 1px solid var(--border2); }
+
+  /* PANELS */
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* CARDS GRID */
+  .listings-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+  .listing-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px; transition: border-color 0.2s;
+    position: relative; overflow: hidden;
+  }
+  .listing-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    opacity: 0; transition: opacity 0.2s;
+  }
+  .listing-card:hover { border-color: var(--border2); }
+  .listing-card:hover::before { opacity: 1; }
+  .listing-card .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+  .listing-id { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .badge { font-size: 10px; padding: 3px 8px; border-radius: 20px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+  .badge-active { background: rgba(0,229,160,0.1); color: var(--accent); border: 1px solid rgba(0,229,160,0.2); }
+  .badge-paused { background: rgba(255,107,53,0.1); color: var(--warn); border: 1px solid rgba(255,107,53,0.2); }
+  .listing-size { font-family: var(--mono); font-size: 28px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+  .listing-region { font-size: 12px; color: var(--muted); margin-bottom: 16px; }
+  .listing-price { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  .listing-price strong { color: var(--accent2); font-family: var(--mono); }
+  .card-actions { display: flex; gap: 8px; margin-top: 16px; }
+
+  /* FORMS */
+  .form-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 28px; max-width: 560px;
+  }
+  .form-card h3 { font-family: var(--mono); font-size: 16px; margin-bottom: 24px; color: var(--accent); }
+  .field { margin-bottom: 18px; }
+  .field label { display: block; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; }
+  .field input, .field select {
+    width: 100%; background: var(--bg); border: 1px solid var(--border2);
+    color: var(--text); font-family: var(--mono); font-size: 14px;
+    padding: 11px 14px; border-radius: var(--radius-sm); outline: none; transition: border-color 0.2s;
+  }
+  .field input:focus, .field select:focus { border-color: var(--accent); }
+  .field input::placeholder { color: var(--muted); }
+  .field select option { background: var(--surface); }
+  .hint { font-size: 11px; color: var(--muted); margin-top: 6px; }
+
+  /* BUTTONS */
+  .btn {
+    padding: 10px 20px; border-radius: var(--radius-sm); font-size: 13px;
+    font-weight: 600; cursor: pointer; border: none; transition: all 0.15s; font-family: var(--sans);
+  }
+  .btn-primary { background: var(--accent); color: #000; }
+  .btn-primary:hover { background: #00c98a; }
+  .btn-secondary { background: transparent; color: var(--text); border: 1px solid var(--border2); }
+  .btn-secondary:hover { border-color: var(--accent2); color: var(--accent2); }
+  .btn-danger { background: transparent; color: var(--warn); border: 1px solid rgba(255,107,53,0.3); }
+  .btn-danger:hover { background: rgba(255,107,53,0.1); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* QUOTE BOX */
+  .quote-box {
+    background: var(--bg); border: 1px solid var(--border2);
+    border-radius: var(--radius-sm); padding: 16px; margin-top: 16px;
+  }
+  .quote-row { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; }
+  .quote-row .ql { color: var(--muted); }
+  .quote-row .qv { font-family: var(--mono); color: var(--text); }
+  .quote-row.total .qv { color: var(--accent); font-size: 15px; }
+  .quote-divider { border: none; border-top: 1px solid var(--border); margin: 8px 0; }
+
+  /* MODAL */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+    z-index: 100; align-items: center; justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--surface); border: 1px solid var(--border2);
+    border-radius: var(--radius); padding: 28px; max-width: 460px; width: 90%;
+  }
+  .modal h3 { font-family: var(--mono); font-size: 15px; color: var(--accent); margin-bottom: 20px; }
+  .modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 24px; }
+
+  /* TX STATUS */
+  .tx-status {
+    position: fixed; bottom: 24px; right: 24px; background: var(--surface2);
+    border: 1px solid var(--border2); border-radius: var(--radius);
+    padding: 14px 20px; font-size: 13px; z-index: 200;
+    display: none; max-width: 320px;
+  }
+  .tx-status.show { display: block; }
+  .tx-status.success { border-color: rgba(0,229,160,0.4); }
+  .tx-status.error { border-color: rgba(255,107,53,0.4); color: var(--warn); }
+
+  /* EMPTY STATE */
+  .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
+  .empty .icon { font-size: 40px; margin-bottom: 16px; opacity: 0.3; }
+  .empty p { font-size: 14px; }
+
+  /* RENTAL CARD */
+  .rental-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px; margin-bottom: 12px;
+  }
+  .rental-meta { display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 12px; }
+  .rental-meta-item { font-size: 12px; }
+  .rental-meta-item .mk { color: var(--muted); display: block; margin-bottom: 2px; }
+  .rental-meta-item .mv { font-family: var(--mono); color: var(--text); }
+
+  /* PROGRESS BAR */
+  .progress-wrap { background: var(--bg); border-radius: 4px; height: 4px; margin-top: 12px; overflow: hidden; }
+  .progress-bar { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 4px; transition: width 0.3s; }
+
+  @media (max-width: 600px) {
+    .stats { grid-template-columns: 1fr 1fr; }
+    .stats .stat-card:last-child { grid-column: span 2; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav>
+    <div class="logo">disk<span>//</span>chain</div>
+    <button class="wallet-btn" id="walletBtn" onclick="connectWallet()">Connect Wallet</button>
+  </nav>
+
+  <div class="hero">
+    <h1>Decentralised<br/><em>Storage Marketplace</em></h1>
+    <p>Rent and provide disk space trustlessly. Powered by smart contracts with escrow, collateral, and dispute resolution.</p>
+  </div>
+
+  <div class="stats">
+    <div class="stat-card">
+      <div class="label">Network</div>
+      <div class="value" id="networkName">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Your Balance</div>
+      <div class="value" id="ethBalance">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Contract</div>
+      <div class="value" id="contractStatus" style="font-size:13px; word-break:break-all;">Not deployed</div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('browse')">Browse Listings</button>
+    <button class="tab" onclick="switchTab('provide')">Provide Storage</button>
+    <button class="tab" onclick="switchTab('rent')">Rent Storage</button>
+    <button class="tab" onclick="switchTab('my')">My Rentals</button>
+  </div>
+
+  <!-- BROWSE -->
+  <div class="panel active" id="panel-browse">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+      <div style="font-size:13px; color:var(--muted);" id="listingCount">No listings loaded</div>
+      <button class="btn btn-secondary" onclick="loadListings()">↻ Refresh</button>
+    </div>
+    <div class="listings-grid" id="listingsGrid">
+      <div class="empty">
+        <div class="icon">◫</div>
+        <p>Connect your wallet to browse storage listings</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROVIDE -->
+  <div class="panel" id="panel-provide">
+    <div class="form-card">
+      <h3>// Create listing</h3>
+      <div class="field">
+        <label>Capacity (GB)</label>
+        <input type="number" id="p_capacity" placeholder="e.g. 500" min="1" max="100000"/>
+      </div>
+      <div class="field">
+        <label>Price per GB per day (wei)</label>
+        <input type="number" id="p_price" placeholder="e.g. 1000000000000 (1 gwei)"/>
+        <div class="hint">1 ETH = 10¹⁸ wei. 1 gwei = 10⁹ wei.</div>
+      </div>
+      <div class="field">
+        <label>Region</label>
+        <input type="text" id="p_region" placeholder="e.g. Asia-South"/>
+      </div>
+      <div class="field">
+        <label>Metadata CID (bytes32 hash)</label>
+        <input type="text" id="p_meta" placeholder="0x0000000000000000000000000000000000000000000000000000000000000000"/>
+      </div>
+
+      <div id="collateralQuote" style="display:none;" class="quote-box">
+        <div class="quote-row">
+          <span class="ql">Required collateral (20% of 30-day value)</span>
+          <span class="qv" id="reqCollateral">—</span>
+        </div>
+      </div>
+
+      <button class="btn btn-primary" style="margin-top:20px; width:100%;" onclick="calcCollateral()">
+        Calculate Collateral Required
+      </button>
+      <button class="btn btn-secondary" style="margin-top:10px; width:100%;" onclick="createListing()">
+        Deploy Listing + Lock Collateral
+      </button>
+    </div>
+  </div>
+
+  <!-- RENT -->
+  <div class="panel" id="panel-rent">
+    <div class="form-card">
+      <h3>// Rent storage</h3>
+      <div class="field">
+        <label>Listing ID</label>
+        <input type="number" id="r_listingId" placeholder="Enter listing ID"/>
+      </div>
+      <div class="field">
+        <label>Capacity to rent (GB)</label>
+        <input type="number" id="r_capacity" placeholder="e.g. 100"/>
+      </div>
+      <div class="field">
+        <label>Duration (days)</label>
+        <input type="number" id="r_duration" placeholder="1 – 365"/>
+      </div>
+      <div class="field">
+        <label>Access endpoint hash (keccak256)</label>
+        <input type="text" id="r_endpoint" placeholder="0x..."/>
+        <div class="hint">Hash of your off-chain storage endpoint string.</div>
+      </div>
+
+      <button class="btn btn-secondary" style="margin-top:8px; width:100%;" onclick="getQuote()">
+        Get Quote
+      </button>
+      <div id="quoteResult" style="display:none;" class="quote-box">
+        <div class="quote-row"><span class="ql">Platform fee (2.5%)</span><span class="qv" id="q_fee">—</span></div>
+        <div class="quote-row"><span class="ql">Provider receives</span><span class="qv" id="q_provider">—</span></div>
+        <div class="quote-row"><span class="ql">Collateral available</span><span class="qv" id="q_col">—</span></div>
+        <hr class="quote-divider"/>
+        <div class="quote-row total"><span class="ql">Total payment</span><span class="qv" id="q_total">—</span></div>
+      </div>
+
+      <button class="btn btn-primary" style="margin-top:12px; width:100%;" onclick="rentStorage()">
+        Rent Storage
+      </button>
+    </div>
+  </div>
+
+  <!-- MY RENTALS -->
+  <div class="panel" id="panel-my">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+      <div style="font-size:13px; color:var(--muted);">Your active and past rentals</div>
+      <button class="btn btn-secondary" onclick="loadMyRentals()">↻ Load</button>
+    </div>
+    <div id="myRentalsContainer">
+      <div class="empty">
+        <div class="icon">◱</div>
+        <p>Connect wallet and click Load to see your rentals</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- RENT MODAL -->
+<div class="modal-overlay" id="rentModal">
+  <div class="modal">
+    <h3>// Confirm rental</h3>
+    <div id="modalContent"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="modalConfirmBtn">Confirm &amp; Pay</button>
+    </div>
+  </div>
+</div>
+
+<!-- TX TOAST -->
+<div class="tx-status" id="txStatus"></div>
+
+<script>
+const CONTRACT_ADDRESS = "0x0000000000000000000000000000000000000000";
+
+const ABI = [
+  "function createListing(uint256 capacityGB, uint256 pricePerGBPerDay, string region, bytes32 metadataCID) payable returns (uint256)",
+  "function rentStorage(uint256 listingId, uint256 capacityGB, uint256 durationDays, bytes32 accessEndpointHash) payable returns (uint256)",
+  "function acknowledgeRental(uint256 rentalId)",
+  "function completeRental(uint256 rentalId)",
+  "function cancelRental(uint256 rentalId)",
+  "function raiseDispute(uint256 rentalId, string reason)",
+  "function quoteDeal(uint256 listingId, uint256 capacityGB, uint256 durationDays) view returns (uint256 total, uint256 platformFee, uint256 providerReceives, uint256 collateralRequired, bool collateralAvailable)",
+  "function requiredCollateralForListing(uint256 capacityGB, uint256 pricePerGBPerDay) pure returns (uint256)",
+  "function listings(uint256) view returns (address provider, uint96 collateralDeposited, uint256 id, uint256 capacityGB, uint256 availableGB, uint256 pricePerGBPerDay, uint256 lockedCollateral, bytes32 metadataCID, string region, uint8 status, uint256 createdAt)",
+  "function rentalCores(uint256) view returns (address provider, address renter, uint256 listingId, uint256 capacityGB, uint256 durationDays, uint256 startTime, uint256 endTime, uint8 status, bool renterAcknowledged, bytes32 accessEndpointHash)",
+  "function rentalFinancials(uint256) view returns (uint256 pricePerGBPerDay, uint256 totalPayment, uint256 platformFee, uint256 providerCollateral)",
+  "function getRenterHistory(address renter, uint256 offset, uint256 limit) view returns (uint256[])",
+  "function renterHistoryCount(address renter) view returns (uint256)",
+  "function isRentalActive(uint256 rentalId) view returns (bool)",
+  "function _listingCounter() view returns (uint256)",
+];
+
+let provider, signer, contract, userAddr;
+
+function showTx(msg, type = 'info') {
+  const el = document.getElementById('txStatus');
+  el.textContent = msg;
+  el.className = 'tx-status show ' + type;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.className = 'tx-status', 5000);
+}
+
+async function connectWallet() {
+  if (!window.ethereum) { showTx('MetaMask not found', 'error'); return; }
+  try {
+    provider = new ethers.BrowserProvider(window.ethereum);
+    signer = await provider.getSigner();
+    userAddr = await signer.getAddress();
+    contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+
+    const net = await provider.getNetwork();
+    const bal = await provider.getBalance(userAddr);
+
+    document.getElementById('walletBtn').textContent = userAddr.slice(0,6) + '...' + userAddr.slice(-4);
+    document.getElementById('walletBtn').classList.add('connected');
+    document.getElementById('networkName').textContent = net.name;
+    document.getElementById('ethBalance').textContent = parseFloat(ethers.formatEther(bal)).toFixed(4) + ' ETH';
+    document.getElementById('contractStatus').textContent = CONTRACT_ADDRESS.slice(0,10) + '...';
+
+    showTx('Wallet connected ✓', 'success');
+    loadListings();
+  } catch(e) {
+    showTx('Connection failed: ' + e.message, 'error');
+  }
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('panel-' + tab).classList.add('active');
+}
+
+const statusLabels = ['Active','Completed','Disputed','Resolved','Cancelled'];
+const statusColors  = ['badge-active','badge-active','badge-paused','badge-active','badge-paused'];
+
+async function loadListings() {
+  if (!contract) { showTx('Connect wallet first', 'error'); return; }
+  const grid = document.getElementById('listingsGrid');
+  grid.innerHTML = '<div class="empty"><p>Loading listings...</p></div>';
+  try {
+    let count = 0;
+    try { count = Number(await contract._listingCounter()); } catch(_) {}
+
+    if (count === 0) {
+      grid.innerHTML = '<div class="empty"><div class="icon">◫</div><p>No listings yet. Be the first provider!</p></div>';
+      document.getElementById('listingCount').textContent = '0 listings';
+      return;
+    }
+
+    let cards = '';
+    let visible = 0;
+    for (let i = 1; i <= Math.min(count, 20); i++) {
+      try {
+        const l = await contract.listings(i);
+        if (Number(l.status) === 2) continue;
+        visible++;
+        const price = ethers.formatUnits(l.pricePerGBPerDay, 'gwei');
+        cards += `
+          <div class="listing-card">
+            <div class="card-header">
+              <span class="listing-id">LISTING #${i}</span>
+              <span class="badge ${statusColors[Number(l.status)]}">${statusLabels[Number(l.status)]}</span>
+            </div>
+            <div class="listing-size">${l.availableGB.toString()} GB</div>
+            <div class="listing-region">📍 ${l.region || 'Unknown region'}</div>
+            <div class="listing-price">Price: <strong>${price} gwei</strong>/GB/day</div>
+            <div class="listing-price">Capacity: <strong>${l.capacityGB.toString()} GB total</strong></div>
+            <div class="listing-price" style="font-size:11px; margin-top:4px;">Provider: ${l.provider.slice(0,8)}...${l.provider.slice(-4)}</div>
+            <div class="card-actions">
+              <button class="btn btn-primary" onclick="openRentModal(${i}, ${l.pricePerGBPerDay.toString()}, '${l.region}')">Rent</button>
+              <button class="btn btn-secondary" onclick="prefillRent(${i})">Details</button>
+            </div>
+          </div>`;
+      } catch(_) {}
+    }
+    grid.innerHTML = cards || '<div class="empty"><p>No active listings found.</p></div>';
+    document.getElementById('listingCount').textContent = visible + ' active listing' + (visible !== 1 ? 's' : '');
+  } catch(e) {
+    grid.innerHTML = '<div class="empty"><p>Error loading: ' + e.message + '</p></div>';
+  }
+}
+
+function prefillRent(id) {
+  switchTab('rent');
+  document.querySelectorAll('.tab')[2].classList.add('active');
+  document.querySelectorAll('.tab')[0].classList.remove('active');
+  document.getElementById('r_listingId').value = id;
+}
+
+let pendingRentData = null;
+function openRentModal(listingId, priceWei, region) {
+  pendingRentData = { listingId };
+  document.getElementById('modalContent').innerHTML = `
+    <p style="color:var(--muted); font-size:13px; margin-bottom:16px;">Listing #${listingId} · ${region}</p>
+    <div class="field"><label>Capacity (GB)</label><input type="number" id="m_cap" placeholder="e.g. 50" min="1"/></div>
+    <div class="field"><label>Duration (days)</label><input type="number" id="m_dur" placeholder="1–365" min="1" max="365"/></div>
+    <div class="field"><label>Endpoint hash (bytes32)</label><input type="text" id="m_ep" placeholder="0x..."/></div>
+  `;
+  document.getElementById('modalConfirmBtn').onclick = confirmRent;
+  document.getElementById('rentModal').classList.add('open');
+}
+
+function closeModal() { document.getElementById('rentModal').classList.remove('open'); }
+
+async function confirmRent() {
+  const cap = document.getElementById('m_cap').value;
+  const dur = document.getElementById('m_dur').value;
+  const ep  = document.getElementById('m_ep').value;
+  if (!cap || !dur || !ep) { showTx('Fill all fields', 'error'); return; }
+  closeModal();
+  try {
+    showTx('Getting quote...');
+    const q = await contract.quoteDeal(pendingRentData.listingId, cap, dur);
+    showTx('Sending transaction...');
+    const tx = await contract.rentStorage(pendingRentData.listingId, cap, dur, ep, { value: q.total });
+    showTx('Waiting for confirmation...');
+    await tx.wait();
+    showTx('Rental created! ✓', 'success');
+    loadListings();
+  } catch(e) {
+    showTx('Error: ' + (e.reason || e.message), 'error');
+  }
+}
+
+async function calcCollateral() {
+  const cap = document.getElementById('p_capacity').value;
+  const price = document.getElementById('p_price').value;
+  if (!cap || !price || !contract) { showTx('Fill capacity, price, and connect wallet', 'error'); return; }
+  try {
+    const req = await contract.requiredCollateralForListing(cap, price);
+    document.getElementById('reqCollateral').textContent = ethers.formatEther(req) + ' ETH';
+    document.getElementById('collateralQuote').style.display = 'block';
+  } catch(e) { showTx('Error: ' + e.message, 'error'); }
+}
+
+async function createListing() {
+  if (!contract) { showTx('Connect wallet first', 'error'); return; }
+  const cap    = document.getElementById('p_capacity').value;
+  const price  = document.getElementById('p_price').value;
+  const region = document.getElementById('p_region').value;
+  const meta   = document.getElementById('p_meta').value || ethers.ZeroHash;
+  if (!cap || !price || !region) { showTx('Fill all fields', 'error'); return; }
+  try {
+    const req = await contract.requiredCollateralForListing(cap, price);
+    showTx('Creating listing...');
+    const tx = await contract.createListing(cap, price, region, meta, { value: req });
+    showTx('Waiting for confirmation...');
+    await tx.wait();
+    showTx('Listing created! ✓', 'success');
+    loadListings();
+  } catch(e) { showTx('Error: ' + (e.reason || e.message), 'error'); }
+}
+
+async function getQuote() {
+  if (!contract) { showTx('Connect wallet first', 'error'); return; }
+  const lid = document.getElementById('r_listingId').value;
+  const cap = document.getElementById('r_capacity').value;
+  const dur = document.getElementById('r_duration').value;
+  if (!lid || !cap || !dur) { showTx('Fill listing ID, capacity, duration', 'error'); return; }
+  try {
+    const q = await contract.quoteDeal(lid, cap, dur);
+    document.getElementById('q_fee').textContent     = ethers.formatEther(q.platformFee) + ' ETH';
+    document.getElementById('q_provider').textContent= ethers.formatEther(q.providerReceives) + ' ETH';
+    document.getElementById('q_col').textContent     = q.collateralAvailable ? '✓ Available' : '✗ Insufficient';
+    document.getElementById('q_total').textContent   = ethers.formatEther(q.total) + ' ETH';
+    document.getElementById('quoteResult').style.display = 'block';
+  } catch(e) { showTx('Quote failed: ' + e.message, 'error'); }
+}
+
+async function rentStorage() {
+  if (!contract) { showTx('Connect wallet first', 'error'); return; }
+  const lid = document.getElementById('r_listingId').value;
+  const cap = document.getElementById('r_capacity').value;
+  const dur = document.getElementById('r_duration').value;
+  const ep  = document.getElementById('r_endpoint').value;
+  if (!lid || !cap || !dur || !ep) { showTx('Fill all fields', 'error'); return; }
+  try {
+    const q = await contract.quoteDeal(lid, cap, dur);
+    showTx('Sending transaction...');
+    const tx = await contract.rentStorage(lid, cap, dur, ep, { value: q.total });
+    showTx('Confirming...');
+    await tx.wait();
+    showTx('Rental active! ✓', 'success');
+  } catch(e) { showTx('Error: ' + (e.reason || e.message), 'error'); }
+}
+
+async function loadMyRentals() {
+  if (!contract) { showTx('Connect wallet first', 'error'); return; }
+  const container = document.getElementById('myRentalsContainer');
+  container.innerHTML = '<div class="empty"><p>Loading...</p></div>';
+  try {
+    const count = Number(await contract.renterHistoryCount(userAddr));
+    if (count === 0) {
+      container.innerHTML = '<div class="empty"><div class="icon">◱</div><p>No rentals found.</p></div>';
+      return;
+    }
+    const ids = await contract.getRenterHistory(userAddr, 0, Math.min(count, 20));
+    let html = '';
+    for (const id of ids) {
+      const rc = await contract.rentalCores(id);
+      const rf = await contract.rentalFinancials(id);
+      const now = Math.floor(Date.now() / 1000);
+      const pct = Math.min(100, Math.round(((now - Number(rc.startTime)) / (Number(rc.endTime) - Number(rc.startTime))) * 100));
+      const endDate = new Date(Number(rc.endTime) * 1000).toLocaleDateString();
+      const statusStr = statusLabels[Number(rc.status)];
+      html += `
+        <div class="rental-card">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
+            <span style="font-family:var(--mono); font-size:13px; color:var(--accent)">RENTAL #${id}</span>
+            <span class="badge ${statusColors[Number(rc.status)]}">${statusStr}</span>
+          </div>
+          <div class="rental-meta">
+            <div class="rental-meta-item"><span class="mk">Capacity</span><span class="mv">${rc.capacityGB.toString()} GB</span></div>
+            <div class="rental-meta-item"><span class="mk">Duration</span><span class="mv">${rc.durationDays.toString()} days</span></div>
+            <div class="rental-meta-item"><span class="mk">Ends</span><span class="mv">${endDate}</span></div>
+            <div class="rental-meta-item"><span class="mk">Total paid</span><span class="mv">${ethers.formatEther(rf.totalPayment)} ETH</span></div>
+            <div class="rental-meta-item"><span class="mk">Acknowledged</span><span class="mv">${rc.renterAcknowledged ? '✓ Yes' : '✗ No'}</span></div>
+          </div>
+          <div class="progress-wrap"><div class="progress-bar" style="width:${pct}%"></div></div>
+          <div style="font-size:11px; color:var(--muted); margin-top:6px;">${pct}% elapsed</div>
+          <div style="display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;">
+            ${!rc.renterAcknowledged && Number(rc.status) === 0 ? `<button class="btn btn-primary" onclick="ackRental(${id})">Acknowledge</button>` : ''}
+            ${Number(rc.status) === 0 ? `<button class="btn btn-danger" onclick="cancelRental(${id})">Cancel</button>` : ''}
+            ${Number(rc.status) === 0 ? `<button class="btn btn-secondary" onclick="raiseDispute(${id})">Raise Dispute</button>` : ''}
+          </div>
+        </div>`;
+    }
+    container.innerHTML = html;
+  } catch(e) {
+    container.innerHTML = '<div class="empty"><p>Error: ' + e.message + '</p></div>';
+  }
+}
+
+async function ackRental(id) {
+  try {
+    showTx('Acknowledging rental...');
+    const tx = await contract.acknowledgeRental(id);
+    await tx.wait();
+    showTx('Acknowledged! ✓', 'success');
+    loadMyRentals();
+  } catch(e) { showTx('Error: ' + (e.reason || e.message), 'error'); }
+}
+
+async function cancelRental(id) {
+  if (!confirm('Cancel within grace period? Platform fee will still be charged.')) return;
+  try {
+    showTx('Cancelling...');
+    const tx = await contract.cancelRental(id);
+    await tx.wait();
+    showTx('Cancelled. Refund sent. ✓', 'success');
+    loadMyRentals();
+  } catch(e) { showTx('Error: ' + (e.reason || e.message), 'error'); }
+}
+
+async function raiseDispute(id) {
+  const reason = prompt('Enter dispute reason:');
+  if (!reason) return;
+  try {
+    showTx('Raising dispute...');
+    const tx = await contract.raiseDispute(id, reason);
+    await tx.wait();
+    showTx('Dispute raised. ✓', 'success');
+    loadMyRentals();
+  } catch(e) { showTx('Error: ' + (e.reason || e.message), 'error'); }
+}
+
+window.ethereum?.on?.('accountsChanged', () => location.reload());
+</script>
+</body>
+</html>
